@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 )
 
@@ -65,59 +66,53 @@ func xor(data io.Reader, key io.ReadSeeker, out io.Writer) error {
 	return nil
 }
 
-func isLowercaseAlpha(c byte) bool {
-	return c >= 'a' && c <= 'z'
-}
-
-func isUppercaseAlpha(c byte) bool {
-	return c >= 'A' && c <= 'Z'
-}
-
-func isAlpha(c byte) bool {
-	return isLowercaseAlpha(c) || isUppercaseAlpha(c)
-}
-
-func isNumeric(c byte) bool {
-	return c >= '0' && c <= '9'
-}
-
-func isSymbol(c byte) bool {
-	return (c >= '!' && c <= '/') ||
-		(c >= ':' && c <= '@') ||
-		(c >= '[' && c <= '`') ||
-		(c >= '{' && c <= '~')
-}
-
-func isWhitespace(c byte) bool {
-	return c == ' ' || c == '\n' || c == '\r' || c == '\t'
-}
-
-func isPrintable(c byte) bool {
-	return isWhitespace(c) || isSymbol(c) || isNumeric(c) || isAlpha(c)
-}
-
-func englishScore(b []byte) float32 {
-	hasSpace := false
-	symbols := 0
-	for _, c := range b {
-		if !isPrintable(c) {
+func languageProbability(b []byte, lang [128]float32) float32 {
+	isUnprintable := func(c byte) bool {
+		return c != '\t' && c != '\n' && c != '\r' && c >= 0 && c <= 0x1F
+	}
+	cosineSimilarity := func(a []float32, b []float32) float32 {
+		count := 0
+		length_a := len(a)
+		length_b := len(b)
+		if length_a > length_b {
+			count = length_a
+		} else {
+			count = length_b
+		}
+		sumA := 0.0
+		s1 := 0.0
+		s2 := 0.0
+		for k := 0; k < count; k++ {
+			bk64 := float64(b[k])
+			ak64 := float64(a[k])
+			if k >= length_a {
+				s2 += math.Pow(bk64, 2)
+				continue
+			}
+			if k >= length_b {
+				s1 += math.Pow(ak64, 2)
+				continue
+			}
+			sumA += ak64 * bk64
+			s1 += math.Pow(ak64, 2)
+			s2 += math.Pow(bk64, 2)
+		}
+		if s1 == 0 || s2 == 0 {
 			return 0
 		}
-		if c == ' ' {
-			hasSpace = true
-		} else if isSymbol(c) {
-			symbols++
+		return float32(sumA / (math.Sqrt(s1) * math.Sqrt(s2)))
+	}
+	var freq [128]float32
+	for _, c := range b {
+		if isUnprintable(c) {
+			return 0
 		}
+		freq[c]++
 	}
-	var score float32 = 0.5
-	if hasSpace {
-		score += 0.2
-	}
-	score -= (float32(symbols) / float32(len(b)))
-	return score
+	return cosineSimilarity(freq[:], lang[:])
 }
-
 func main() {
+
 	data, err := hex.DecodeString("1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736")
 	if err != nil {
 		log.Fatal(err)
@@ -130,8 +125,9 @@ func main() {
 			log.Fatal(err)
 		}
 		b := out.Bytes()
-		if englishScore(b) >= 0.5 {
-			fmt.Printf("'%s' key=%d\n", string(b), c)
+		s := languageProbability(b, FREQ)
+		if s >= 0.6 {
+			fmt.Printf("'%s', %f key=%d\n", string(b), s, c)
 		}
 	}
 }

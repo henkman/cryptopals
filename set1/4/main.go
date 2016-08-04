@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"strings"
 )
@@ -421,32 +422,119 @@ func isWhitespace(c byte) bool {
 	return c == ' ' || c == '\n' || c == '\r' || c == '\t'
 }
 
-func isPrintable(c byte) bool {
-	return isWhitespace(c) || isSymbol(c) || isNumeric(c) || isAlpha(c)
+func cosineSimilarity(a []float32, b []float32) float32 {
+	count := 0
+	length_a := len(a)
+	length_b := len(b)
+	if length_a > length_b {
+		count = length_a
+	} else {
+		count = length_b
+	}
+	sumA := 0.0
+	s1 := 0.0
+	s2 := 0.0
+	for k := 0; k < count; k++ {
+		bk64 := float64(b[k])
+		ak64 := float64(a[k])
+		if k >= length_a {
+			s2 += math.Pow(bk64, 2)
+			continue
+		}
+		if k >= length_b {
+			s1 += math.Pow(ak64, 2)
+			continue
+		}
+		sumA += ak64 * bk64
+		s1 += math.Pow(ak64, 2)
+		s2 += math.Pow(bk64, 2)
+	}
+	if s1 == 0 || s2 == 0 {
+		return 0
+	}
+	return float32(sumA / (math.Sqrt(s1) * math.Sqrt(s2)))
 }
 
-func englishScore(b []byte) float32 {
-	hasSpace := false
-	symbols := 0
+func englishProbability(b []byte) float32 {
+	var freq ['z' + 1 - 'a']float32
+	var symbols, whitespace, numbers uint
 	for _, c := range b {
-		if !isPrintable(c) {
+		if isSymbol(c) {
+			symbols++
+		} else if isWhitespace(c) {
+			whitespace++
+		} else if isAlpha(c) {
+			if isUppercaseAlpha(c) {
+				freq[c+32-'a']++
+			} else {
+				freq[c-'a']++
+			}
+		} else if isNumeric(c) {
+			numbers++
+		} else {
 			return 0
 		}
-		if c == ' ' {
-			hasSpace = true
-		} else if isSymbol(c) {
-			symbols++
-		}
 	}
-	var score float32 = 0.5
-	if hasSpace {
-		score += 0.2
+	var FREQ = ['z' + 1 - 'a']float32{
+		'a' - 'a': 8.34,
+		'b' - 'a': 1.54,
+		'c' - 'a': 2.73,
+		'd' - 'a': 4.14,
+		'e' - 'a': 12.6,
+		'f' - 'a': 2.03,
+		'g' - 'a': 1.92,
+		'h' - 'a': 6.11,
+		'i' - 'a': 6.71,
+		'j' - 'a': 0.23,
+		'k' - 'a': 0.87,
+		'l' - 'a': 4.24,
+		'm' - 'a': 2.53,
+		'n' - 'a': 6.8,
+		'o' - 'a': 7.7,
+		'p' - 'a': 1.66,
+		'q' - 'a': 0.09,
+		'r' - 'a': 5.68,
+		's' - 'a': 6.11,
+		't' - 'a': 9.37,
+		'u' - 'a': 2.85,
+		'v' - 'a': 1.06,
+		'w' - 'a': 2.34,
+		'x' - 'a': 0.2,
+		'y' - 'a': 2.04,
+		'z' - 'a': 0.06,
 	}
-	score -= (float32(symbols) / float32(len(b)))
-	return score
+	return cosineSimilarity(freq[:], FREQ[:])
 }
 
 func main() {
+	{
+		fmt.Println(englishProbability([]byte(`this is a basic english sentence.
+		maybe we should include an apostrophe.
+		let's try to programmatically detect if this is english.`)))
+		fmt.Println(englishProbability([]byte(`well done.
+let's see if we can detect more of these english sentences.
+a nice test is to just write out some and then throw them in the detector`)))
+		fmt.Println(englishProbability([]byte(`das ist ein deutscher satz.
+		vielleicht sollten wir ein komma benutzen.
+		lass uns probieren ob wir, programmatisch, erkennen koennen ob das hier deutsch ist.`)))
+		fmt.Println(englishProbability([]byte(`mit ein bisschen uebung kann das jeder.
+jeden tag eine stunde zeit nehmen und konzentriert daran arbeiten.
+nach nur wenigen wochen zeigen sich erste ergebnisse und es macht mehr spass weiterzumachen`)))
+		fmt.Println(englishProbability([]byte(`que es un registro espanol.
+		tal vez deberiamos usar una coma.
+		vamos a tratar si podemos programacion, a ver si este es el espanol.`)))
+		fmt.Println()
+		fmt.Println(englishProbability([]byte(`hadasd hfdk asdlk. asdjk dasd. aasd
+asdasdkl mrpdqjmf sj asdkz lbow sdjvo. asdvj ns pqi smr jsss glbui svu. je lolo mama tasta gran holie
+wang dang shamalamandang`)))
+		fmt.Println(englishProbability([]byte(`roro wolo hada fang. schnu susu mal fofa schwing ding song.
+glubb flubb habaduppedidupp snip snap bingus aebb. schnurr surr perpurr gran schling swing erdbeere`)))
+		fmt.Println(englishProbability([]byte(`eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+eeeeeeeeeeeeeeeeeeeeeeeeeeeee
+eeeeeeeeeeeeee`)))
+	}
+	return
+
 	lines := strings.Split(FILE, "\n")
 	for ln, line := range lines {
 		data, err := hex.DecodeString(line)
@@ -461,8 +549,8 @@ func main() {
 				log.Fatal(err)
 			}
 			b := out.Bytes()
-			s := englishScore(b)
-			if s >= 0.5 {
+			s := englishProbability(b)
+			if s >= 0.75 {
 				fmt.Printf("%d: %f, '%s' key=%d\n", ln, s, string(b), c)
 			}
 		}
