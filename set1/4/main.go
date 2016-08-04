@@ -395,145 +395,155 @@ func xor(data io.Reader, key io.ReadSeeker, out io.Writer) error {
 	return nil
 }
 
-func isLowercaseAlpha(c byte) bool {
-	return c >= 'a' && c <= 'z'
-}
-
-func isUppercaseAlpha(c byte) bool {
-	return c >= 'A' && c <= 'Z'
-}
-
-func isAlpha(c byte) bool {
-	return isLowercaseAlpha(c) || isUppercaseAlpha(c)
-}
-
-func isNumeric(c byte) bool {
-	return c >= '0' && c <= '9'
-}
-
-func isSymbol(c byte) bool {
-	return (c >= '!' && c <= '/') ||
-		(c >= ':' && c <= '@') ||
-		(c >= '[' && c <= '`') ||
-		(c >= '{' && c <= '~')
-}
-
-func isWhitespace(c byte) bool {
-	return c == ' ' || c == '\n' || c == '\r' || c == '\t'
-}
-
-func cosineSimilarity(a []float32, b []float32) float32 {
-	count := 0
-	length_a := len(a)
-	length_b := len(b)
-	if length_a > length_b {
-		count = length_a
-	} else {
-		count = length_b
+func languageProbability(b []byte, lang [128]float64) float64 {
+	isUnprintable := func(c byte) bool {
+		return c != '\t' && c != '\n' && c != '\r' && c >= 0 && c <= 0x1F
 	}
-	sumA := 0.0
-	s1 := 0.0
-	s2 := 0.0
-	for k := 0; k < count; k++ {
-		bk64 := float64(b[k])
-		ak64 := float64(a[k])
-		if k >= length_a {
-			s2 += math.Pow(bk64, 2)
-			continue
-		}
-		if k >= length_b {
-			s1 += math.Pow(ak64, 2)
-			continue
-		}
-		sumA += ak64 * bk64
-		s1 += math.Pow(ak64, 2)
-		s2 += math.Pow(bk64, 2)
-	}
-	if s1 == 0 || s2 == 0 {
-		return 0
-	}
-	return float32(sumA / (math.Sqrt(s1) * math.Sqrt(s2)))
-}
-
-func englishProbability(b []byte) float32 {
-	var freq ['z' + 1 - 'a']float32
-	var symbols, whitespace, numbers uint
-	for _, c := range b {
-		if isSymbol(c) {
-			symbols++
-		} else if isWhitespace(c) {
-			whitespace++
-		} else if isAlpha(c) {
-			if isUppercaseAlpha(c) {
-				freq[c+32-'a']++
-			} else {
-				freq[c-'a']++
-			}
-		} else if isNumeric(c) {
-			numbers++
+	cosineSimilarity := func(a []float64, b []float64) float64 {
+		count := 0
+		length_a := len(a)
+		length_b := len(b)
+		if length_a > length_b {
+			count = length_a
 		} else {
+			count = length_b
+		}
+		sumA := 0.0
+		s1 := 0.0
+		s2 := 0.0
+		for k := 0; k < count; k++ {
+			if k >= length_a {
+				s2 += math.Pow(b[k], 2)
+				continue
+			}
+			if k >= length_b {
+				s1 += math.Pow(a[k], 2)
+				continue
+			}
+			sumA += a[k] * b[k]
+			s1 += math.Pow(a[k], 2)
+			s2 += math.Pow(b[k], 2)
+		}
+		if s1 == 0 || s2 == 0 {
 			return 0
 		}
+		return sumA / (math.Sqrt(s1) * math.Sqrt(s2))
 	}
-	var FREQ = ['z' + 1 - 'a']float32{
-		'a' - 'a': 8.34,
-		'b' - 'a': 1.54,
-		'c' - 'a': 2.73,
-		'd' - 'a': 4.14,
-		'e' - 'a': 12.6,
-		'f' - 'a': 2.03,
-		'g' - 'a': 1.92,
-		'h' - 'a': 6.11,
-		'i' - 'a': 6.71,
-		'j' - 'a': 0.23,
-		'k' - 'a': 0.87,
-		'l' - 'a': 4.24,
-		'm' - 'a': 2.53,
-		'n' - 'a': 6.8,
-		'o' - 'a': 7.7,
-		'p' - 'a': 1.66,
-		'q' - 'a': 0.09,
-		'r' - 'a': 5.68,
-		's' - 'a': 6.11,
-		't' - 'a': 9.37,
-		'u' - 'a': 2.85,
-		'v' - 'a': 1.06,
-		'w' - 'a': 2.34,
-		'x' - 'a': 0.2,
-		'y' - 'a': 2.04,
-		'z' - 'a': 0.06,
+	var freq [128]float64
+	for _, c := range b {
+		if c > 0x7F || isUnprintable(c) {
+			return 0
+		}
+		freq[c]++
 	}
-	return cosineSimilarity(freq[:], FREQ[:])
+	return cosineSimilarity(freq[:], lang[:])
+}
+
+func englishProbability(b []byte) float64 {
+	var FREQ = [128]float64{
+		' ':  0.169517,
+		'e':  0.096241,
+		't':  0.070165,
+		'a':  0.062427,
+		'o':  0.059632,
+		'n':  0.054496,
+		'h':  0.049977,
+		'i':  0.049460,
+		's':  0.048570,
+		'r':  0.043618,
+		'd':  0.034301,
+		'l':  0.031643,
+		'u':  0.022752,
+		'm':  0.018603,
+		'w':  0.018392,
+		'c':  0.017356,
+		'f':  0.016327,
+		'g':  0.016189,
+		'y':  0.015914,
+		',':  0.015488,
+		'p':  0.012140,
+		'b':  0.011687,
+		'.':  0.008415,
+		'v':  0.007032,
+		'k':  0.006669,
+		'"':  0.005339,
+		'I':  0.004507,
+		'\'': 0.003816,
+		'-':  0.003653,
+		';':  0.002284,
+		'T':  0.001912,
+		'A':  0.001464,
+		'M':  0.001357,
+		'S':  0.001324,
+		'H':  0.001309,
+		'!':  0.001174,
+		'W':  0.001172,
+		'B':  0.001056,
+		'?':  0.001056,
+		'x':  0.000915,
+		'q':  0.000831,
+		'C':  0.000767,
+		'j':  0.000732,
+		'L':  0.000725,
+		'D':  0.000718,
+		'_':  0.000691,
+		'E':  0.000652,
+		'N':  0.000589,
+		'z':  0.000559,
+		'P':  0.000524,
+		'O':  0.000493,
+		'Y':  0.000488,
+		'F':  0.000411,
+		'J':  0.000385,
+		'G':  0.000360,
+		'R':  0.000348,
+		':':  0.000337,
+		'K':  0.000121,
+		'Q':  0.000120,
+		')':  0.000112,
+		'(':  0.000112,
+		'V':  0.000100,
+		'U':  0.000099,
+		'0':  0.000056,
+		'1':  0.000055,
+		'*':  0.000051,
+		'X':  0.000032,
+		'2':  0.000029,
+		'8':  0.000024,
+		'5':  0.000023,
+		'7':  0.000020,
+		'3':  0.000020,
+		'4':  0.000019,
+		'6':  0.000015,
+		'9':  0.000013,
+		'Z':  0.000011,
+		'&':  0.000002,
+		'[':  0.000001,
+		']':  0.000001,
+		'$':  0.000001,
+		'/':  0.000000,
+		'>':  0.000000,
+		'%':  0.000000,
+		'#':  0.000000,
+		'@':  0.000000,
+		'+':  0.000000,
+		'<':  0.000000,
+		'\\': 0.000000,
+		'=':  0.000000,
+		'^':  0.000000,
+		'`':  0.000000,
+		'\r': 0.000000,
+		'\n': 0.000000,
+		'\t': 0.000000,
+		'{':  0.000000,
+		'|':  0.000000,
+		'}':  0.000000,
+		'~':  0.000000,
+	}
+	return languageProbability(b, FREQ)
 }
 
 func main() {
-	{
-		fmt.Println(englishProbability([]byte(`this is a basic english sentence.
-		maybe we should include an apostrophe.
-		let's try to programmatically detect if this is english.`)))
-		fmt.Println(englishProbability([]byte(`well done.
-let's see if we can detect more of these english sentences.
-a nice test is to just write out some and then throw them in the detector`)))
-		fmt.Println(englishProbability([]byte(`das ist ein deutscher satz.
-		vielleicht sollten wir ein komma benutzen.
-		lass uns probieren ob wir, programmatisch, erkennen koennen ob das hier deutsch ist.`)))
-		fmt.Println(englishProbability([]byte(`mit ein bisschen uebung kann das jeder.
-jeden tag eine stunde zeit nehmen und konzentriert daran arbeiten.
-nach nur wenigen wochen zeigen sich erste ergebnisse und es macht mehr spass weiterzumachen`)))
-		fmt.Println(englishProbability([]byte(`que es un registro espanol.
-		tal vez deberiamos usar una coma.
-		vamos a tratar si podemos programacion, a ver si este es el espanol.`)))
-		fmt.Println()
-		fmt.Println(englishProbability([]byte(`hadasd hfdk asdlk. asdjk dasd. aasd
-asdasdkl mrpdqjmf sj asdkz lbow sdjvo. asdvj ns pqi smr jsss glbui svu. je lolo mama tasta gran holie
-wang dang shamalamandang`)))
-		fmt.Println(englishProbability([]byte(`roro wolo hada fang. schnu susu mal fofa schwing ding song.
-glubb flubb habaduppedidupp snip snap bingus aebb. schnurr surr perpurr gran schling swing erdbeere`)))
-		fmt.Println(englishProbability([]byte(`eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-eeeeeeeeeeeeeeeeeeeeeeeeeeeee
-eeeeeeeeeeeeee`)))
-	}
-	return
 
 	lines := strings.Split(FILE, "\n")
 	for ln, line := range lines {

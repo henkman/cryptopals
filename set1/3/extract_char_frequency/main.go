@@ -7,22 +7,25 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 )
 
 var (
-	_file     string
+	_files    string
 	_out      string
 	_csv      bool
 	_go       bool
 	_sortfreq bool
+	_skipnl   bool
 )
 
 func init() {
-	flag.StringVar(&_file, "f", "", "file to read")
+	flag.StringVar(&_files, "f", "", "commaseparated files to read")
 	flag.StringVar(&_out, "o", "", "file that will contain frequencies")
 	flag.BoolVar(&_csv, "csv", false, "print as csv")
 	flag.BoolVar(&_go, "go", false, "print as go array")
 	flag.BoolVar(&_sortfreq, "s", false, "sort by frequency, not by ASCII code")
+	flag.BoolVar(&_skipnl, "snl", false, "skip newlines")
 	flag.Parse()
 }
 
@@ -32,7 +35,7 @@ func isUnprintable(c byte) bool {
 
 type CharacterFrequency struct {
 	Character byte
-	Frequency float32
+	Frequency float64
 }
 
 type ByFrequency []CharacterFrequency
@@ -42,7 +45,7 @@ func (a ByFrequency) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByFrequency) Less(i, j int) bool { return a[i].Frequency > a[j].Frequency }
 
 func main() {
-	if _file == "" || _out == "" || _csv == _go {
+	if _files == "" || _csv == _go {
 		flag.Usage()
 		return
 	}
@@ -51,31 +54,37 @@ func main() {
 		lang[i].Character = byte(i)
 	}
 	{
-		fd, err := os.Open(_file)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer fd.Close()
-		var total float32
 		var buf [1024 * 8]byte
-		for {
-			n, err := fd.Read(buf[:])
-			if n > 0 {
-				for _, c := range buf[:n] {
-					if c > 0x7F {
-						log.Fatal("file contains character out of ASCII range")
-					} else if isUnprintable(c) {
-						log.Fatal("file contains unprintable characters")
-					}
-					lang[c].Frequency++
-				}
-				total += float32(n)
-			}
+		var total float64
+		files := strings.Split(_files, ",")
+		for _, file := range files {
+			fd, err := os.Open(strings.TrimSpace(file))
 			if err != nil {
-				if err == io.EOF {
-					break
-				}
 				log.Fatal(err)
+			}
+			defer fd.Close()
+			for {
+				n, err := fd.Read(buf[:])
+				if n > 0 {
+					o := 0
+					for _, c := range buf[:n] {
+						if c > 0x7F || isUnprintable(c) {
+							continue
+						}
+						if _skipnl && (c == '\n' || c == '\r') {
+							continue
+						}
+						lang[c].Frequency++
+						o++
+					}
+					total += float64(o)
+				}
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					log.Fatal(err)
+				}
 			}
 		}
 		for i, _ := range lang {
@@ -88,48 +97,56 @@ func main() {
 		sort.Sort(ByFrequency(lang[:]))
 	}
 	{
-		fd, err := os.OpenFile(_out, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0750)
-		if err != nil {
-			log.Fatal(err)
+		var out io.WriteCloser
+		if _out == "" {
+			out = os.Stdout
+		} else {
+			fd, err := os.OpenFile(_out, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0750)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer fd.Close()
+			out = fd
 		}
-		defer fd.Close()
 		if _csv {
-			fd.WriteString("character,frequency\n")
+			io.WriteString(out, "character,frequency\n")
 			for _, cf := range lang {
 				if isUnprintable(cf.Character) {
 					continue
 				} else if cf.Character == ' ' {
-					fmt.Fprintf(fd, "SPACE,%f\n", cf.Frequency)
+					fmt.Fprintf(out, "SPACE,%f\n", cf.Frequency)
 				} else if cf.Character == '\t' {
-					fmt.Fprintf(fd, "TAB,%f\n", cf.Frequency)
+					fmt.Fprintf(out, "TAB,%f\n", cf.Frequency)
 				} else if cf.Character == '\n' {
-					fmt.Fprintf(fd, "NL,%f\n", cf.Frequency)
+					fmt.Fprintf(out, "NL,%f\n", cf.Frequency)
 				} else if cf.Character == '\r' {
-					fmt.Fprintf(fd, "CR,%f\n", cf.Frequency)
+					fmt.Fprintf(out, "CR,%f\n", cf.Frequency)
 				} else {
-					fmt.Fprintf(fd, "%c%f\n", cf.Character, cf.Frequency)
+					fmt.Fprintf(out, "%c%f\n", cf.Character, cf.Frequency)
 				}
 			}
 		} else if _go {
-			fd.WriteString("var LANG = [128]byte {\n")
+			io.WriteString(out, "var FREQ = [128]float64 {\n")
 			for _, cf := range lang {
 				if isUnprintable(cf.Character) {
 					continue
 				} else if cf.Character == ' ' {
-					fmt.Fprintf(fd, "\t' ':%f,\n", cf.Frequency)
+					fmt.Fprintf(out, "\t' ':%f,\n", cf.Frequency)
 				} else if cf.Character == '\t' {
-					fmt.Fprintf(fd, "\t'\\t':%f,\n", cf.Frequency)
+					fmt.Fprintf(out, "\t'\\t':%f,\n", cf.Frequency)
 				} else if cf.Character == '\n' {
-					fmt.Fprintf(fd, "\t'\\n':%f,\n", cf.Frequency)
+					fmt.Fprintf(out, "\t'\\n':%f,\n", cf.Frequency)
 				} else if cf.Character == '\r' {
-					fmt.Fprintf(fd, "\t'\\r':%f,\n", cf.Frequency)
+					fmt.Fprintf(out, "\t'\\r':%f,\n", cf.Frequency)
 				} else if cf.Character == '\'' {
-					fmt.Fprintf(fd, "\t'\\'':%f,\n", cf.Frequency)
+					fmt.Fprintf(out, "\t'\\'':%f,\n", cf.Frequency)
+				} else if cf.Character == '\\' {
+					fmt.Fprintf(out, "\t'\\\\':%f,\n", cf.Frequency)
 				} else {
-					fmt.Fprintf(fd, "\t'%c':%f,\n", cf.Character, cf.Frequency)
+					fmt.Fprintf(out, "\t'%c':%f,\n", cf.Character, cf.Frequency)
 				}
 			}
-			fd.WriteString("}\n")
+			io.WriteString(out, "}\n")
 		}
 	}
 }
