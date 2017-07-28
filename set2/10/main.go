@@ -1,10 +1,11 @@
 package main
 
 import (
-	"crypto/aes"
 	"encoding/base64"
 	"fmt"
 	"log"
+
+	"github.com/henkman/cryptopals"
 )
 
 const (
@@ -74,44 +75,6 @@ oql027IS5XvSHynQtvFmw0HTk9UXt8HdVNTqcdy/jUFmXpXNP2Wvn8PrU2Dh
 kkIzWhQ5Rxd/vnM2QQr9Cxa2J9GXEV3kGDiZV90+PCDSVGY4VgF8y7GedI1h`
 )
 
-func xor(src, dst []byte) {
-	for i := range dst {
-		dst[i] ^= src[i]
-	}
-}
-
-func encryptAESCBC(src, dst, iv, key []byte) error {
-	c, err := aes.NewCipher(key)
-	if err != nil {
-		return err
-	}
-	bs := c.BlockSize()
-	for i := 0; i < len(src)/bs; i++ {
-		a := src[i*bs:]
-		b := dst[i*bs:]
-		xor(a[:bs], iv)
-		c.Encrypt(b, iv)
-		copy(iv, b)
-	}
-	return nil
-}
-
-func decryptAESCBC(src, dst, iv, key []byte) error {
-	c, err := aes.NewCipher(key)
-	if err != nil {
-		return err
-	}
-	bs := c.BlockSize()
-	for i := 0; i < len(src)/bs; i++ {
-		a := src[i*bs:]
-		b := dst[i*bs:]
-		c.Decrypt(b, a)
-		xor(iv, b[:bs])
-		copy(iv, a)
-	}
-	return nil
-}
-
 func main() {
 	src, err := base64.StdEncoding.DecodeString(FILE)
 	if err != nil {
@@ -120,7 +83,7 @@ func main() {
 	dst := make([]byte, len(src))
 	key := []byte("YELLOW SUBMARINE")
 	iv := make([]byte, len(key))
-	if err := decryptAESCBC(src, dst, iv, key); err != nil {
+	if err := cryptopals.DecryptAESCBC(src, dst, iv, key); err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println(string(dst))

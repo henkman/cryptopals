@@ -8,6 +8,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/henkman/cryptopals"
 )
 
 var (
@@ -27,10 +29,6 @@ func init() {
 	flag.BoolVar(&_sortfreq, "s", false, "sort by frequency, not by ASCII code")
 	flag.BoolVar(&_skipnl, "snl", false, "skip newlines")
 	flag.Parse()
-}
-
-func isUnprintable(c byte) bool {
-	return c != '\t' && c != '\n' && c != '\r' && (c >= 0 && c <= 0x1F) || c == 0x7F
 }
 
 type CharacterFrequency struct {
@@ -68,7 +66,7 @@ func main() {
 				if n > 0 {
 					o := 0
 					for _, c := range buf[:n] {
-						if c > 0x7F || isUnprintable(c) {
+						if c > 0x7F || cryptopals.IsUnprintable(c) {
 							continue
 						}
 						if _skipnl && (c == '\n' || c == '\r') {
@@ -111,7 +109,7 @@ func main() {
 		if _csv {
 			io.WriteString(out, "character,frequency\n")
 			for _, cf := range lang {
-				if isUnprintable(cf.Character) {
+				if cryptopals.IsUnprintable(cf.Character) {
 					continue
 				} else if cf.Character == ' ' {
 					fmt.Fprintf(out, "SPACE,%f\n", cf.Frequency)
@@ -128,7 +126,7 @@ func main() {
 		} else if _go {
 			io.WriteString(out, "var FREQ = [128]float64 {\n")
 			for _, cf := range lang {
-				if isUnprintable(cf.Character) {
+				if cryptopals.IsUnprintable(cf.Character) {
 					continue
 				} else if cf.Character == ' ' {
 					fmt.Fprintf(out, "\t' ':%f,\n", cf.Frequency)

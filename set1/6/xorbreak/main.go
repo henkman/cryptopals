@@ -6,189 +6,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
 	"sort"
+
+	"github.com/henkman/cryptopals"
 )
-
-func hammingDistance(a, b []byte) uint {
-	var TABLE = [256]byte{
-		0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,
-		1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-		1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-		2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-		1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-		2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-		2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-		3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-		1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5,
-		2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-		2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-		3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-		2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-		3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-		3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7,
-		4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8,
-	}
-	var n int
-	if len(a) >= len(b) {
-		n = len(b)
-	} else {
-		n = len(a)
-	}
-	var h uint
-	for i := 0; i < n; i++ {
-		h += uint(TABLE[a[i]^b[i]])
-	}
-	return h
-}
-
-func languageProbability(b []byte, lang [128]float64) float64 {
-	isUnprintable := func(c byte) bool {
-		return c != '\t' && c != '\n' && c != '\r' && c >= 0 && c <= 0x1F
-	}
-	cosineSimilarity := func(a []float64, b []float64) float64 {
-		count := 0
-		length_a := len(a)
-		length_b := len(b)
-		if length_a > length_b {
-			count = length_a
-		} else {
-			count = length_b
-		}
-		sumA := 0.0
-		s1 := 0.0
-		s2 := 0.0
-		for k := 0; k < count; k++ {
-			if k >= length_a {
-				s2 += math.Pow(b[k], 2)
-				continue
-			}
-			if k >= length_b {
-				s1 += math.Pow(a[k], 2)
-				continue
-			}
-			sumA += a[k] * b[k]
-			s1 += math.Pow(a[k], 2)
-			s2 += math.Pow(b[k], 2)
-		}
-		if s1 == 0 || s2 == 0 {
-			return 0
-		}
-		return sumA / (math.Sqrt(s1) * math.Sqrt(s2))
-	}
-	var freq [128]float64
-	for _, c := range b {
-		if c > 0x7F || isUnprintable(c) {
-			return 0
-		}
-		freq[c]++
-	}
-	return cosineSimilarity(freq[:], lang[:])
-}
-
-func englishProbability(b []byte) float64 {
-	var FREQ = [128]float64{
-		' ':  0.169517,
-		'e':  0.096241,
-		't':  0.070165,
-		'a':  0.062427,
-		'o':  0.059632,
-		'n':  0.054496,
-		'h':  0.049977,
-		'i':  0.049460,
-		's':  0.048570,
-		'r':  0.043618,
-		'd':  0.034301,
-		'l':  0.031643,
-		'u':  0.022752,
-		'm':  0.018603,
-		'w':  0.018392,
-		'c':  0.017356,
-		'f':  0.016327,
-		'g':  0.016189,
-		'y':  0.015914,
-		',':  0.015488,
-		'p':  0.012140,
-		'b':  0.011687,
-		'.':  0.008415,
-		'v':  0.007032,
-		'k':  0.006669,
-		'"':  0.005339,
-		'I':  0.004507,
-		'\'': 0.003816,
-		'-':  0.003653,
-		';':  0.002284,
-		'T':  0.001912,
-		'A':  0.001464,
-		'M':  0.001357,
-		'S':  0.001324,
-		'H':  0.001309,
-		'!':  0.001174,
-		'W':  0.001172,
-		'B':  0.001056,
-		'?':  0.001056,
-		'x':  0.000915,
-		'q':  0.000831,
-		'C':  0.000767,
-		'j':  0.000732,
-		'L':  0.000725,
-		'D':  0.000718,
-		'_':  0.000691,
-		'E':  0.000652,
-		'N':  0.000589,
-		'z':  0.000559,
-		'P':  0.000524,
-		'O':  0.000493,
-		'Y':  0.000488,
-		'F':  0.000411,
-		'J':  0.000385,
-		'G':  0.000360,
-		'R':  0.000348,
-		':':  0.000337,
-		'K':  0.000121,
-		'Q':  0.000120,
-		')':  0.000112,
-		'(':  0.000112,
-		'V':  0.000100,
-		'U':  0.000099,
-		'0':  0.000056,
-		'1':  0.000055,
-		'*':  0.000051,
-		'X':  0.000032,
-		'2':  0.000029,
-		'8':  0.000024,
-		'5':  0.000023,
-		'7':  0.000020,
-		'3':  0.000020,
-		'4':  0.000019,
-		'6':  0.000015,
-		'9':  0.000013,
-		'Z':  0.000011,
-		'&':  0.000002,
-		'[':  0.000001,
-		']':  0.000001,
-		'$':  0.000001,
-		'/':  0.000000,
-		'>':  0.000000,
-		'%':  0.000000,
-		'#':  0.000000,
-		'@':  0.000000,
-		'+':  0.000000,
-		'<':  0.000000,
-		'\\': 0.000000,
-		'=':  0.000000,
-		'^':  0.000000,
-		'`':  0.000000,
-		'\r': 0.000000,
-		'\n': 0.000000,
-		'\t': 0.000000,
-		'{':  0.000000,
-		'|':  0.000000,
-		'}':  0.000000,
-		'~':  0.000000,
-	}
-	return languageProbability(b, FREQ)
-}
 
 type KeysizeProbability struct {
 	Keysize     uint
@@ -216,8 +37,8 @@ func XORFindProbableKeysizes(enc []byte, limit uint) []KeysizeProbability {
 	ksps := make([]KeysizeProbability, 0, l/2-2)
 	for ks := 2; ks < l/2; ks++ {
 		var h float64
-		h += float64(hammingDistance(enc[:ks], enc[l-ks:]))
-		h += float64(hammingDistance(enc[ks:], enc[:l-ks]))
+		h += float64(cryptopals.HammingDistance(enc[:ks], enc[l-ks:]))
+		h += float64(cryptopals.HammingDistance(enc[ks:], enc[:l-ks]))
 		h /= float64(l)
 		ksps = append(ksps, KeysizeProbability{uint(ks), h})
 	}
@@ -260,10 +81,6 @@ func (p CharacterByCount) Swap(i, j int) {
 }
 func (p CharacterByCount) Less(i, j int) bool {
 	return p[i].Count > p[j].Count
-}
-
-func isUnprintable(c byte) bool {
-	return c != '\t' && c != '\n' && c != '\r' && (c >= 0 && c <= 0x1F) || c == 0x7F
 }
 
 var (
@@ -329,7 +146,7 @@ func main() {
 						t[o] = enc[i] ^ byte(c)
 						o++
 					}
-					s := englishProbability(t)
+					s := cryptopals.LanguageProbability(t, cryptopals.English_Letter_Frequency)
 					if s >= _englishprobabilitylimit {
 						cpbs = append(cpbs, CharacterProbability{byte(c), s})
 					}
@@ -380,7 +197,7 @@ func main() {
 		}
 		fmt.Println("most probable key:")
 		for _, c := range mpk {
-			if isUnprintable(c) {
+			if cryptopals.IsUnprintable(c) {
 				fmt.Printf("0x%02x,", c)
 			} else {
 				fmt.Printf("%c,", c)

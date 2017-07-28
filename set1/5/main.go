@@ -1,12 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io"
-	"log"
-	"os"
+
+	"github.com/henkman/cryptopals"
 )
 
 const FILE = `0e3647e8592d35514a081243582536ed3de6734059001e3f535ce6271032
@@ -337,70 +335,10 @@ e03555453d1e31775f37331823164c341c09e310463438481019fb0b12fa
 4c071a57e9356ee415103c5c53e254063f2019340969e30a2e381d5b2555
 32042f46431d2c44607934ed180c1028136a5f2b26092e3b2c4e2930585a`
 
-func xor(data io.Reader, key io.ReadSeeker, out io.Writer) error {
-	const BUF_SIZE = 32 * 1024
-
-	// short path for key files
-	// smaller than buffer
-	if kf, ok := key.(*os.File); ok {
-		fi, err := kf.Stat()
-		if err != nil {
-			return err
-		}
-		if fi.Size() < BUF_SIZE {
-			skbuf := make([]byte, fi.Size())
-			_, err := key.Read(skbuf)
-			if err != nil {
-				return err
-			}
-			key = bytes.NewReader(skbuf)
-		}
-	}
-
-	var dbuf, kbuf [BUF_SIZE]byte
-	for {
-		n, err := data.Read(dbuf[:])
-		if n > 0 {
-			{
-				o := 0
-				for o != n {
-					kn, err := key.Read(kbuf[o:n])
-					o += kn
-					if err != nil {
-						if err == io.EOF {
-							key.Seek(0, 0)
-							continue
-						}
-						return err
-					}
-				}
-			}
-			for i := 0; i < n; i++ {
-				dbuf[i] ^= kbuf[i]
-			}
-			_, err := out.Write(dbuf[:n])
-			if err != nil {
-				return err
-			}
-		}
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-	}
-	return nil
-}
-
 func main() {
 	const TEXT = `Burning 'em, if you ain't quick and nimble
 I go crazy when I hear a cymbal`
-	key := bytes.NewReader([]byte("ICE"))
-	out := bytes.NewBufferString("")
-	if err := xor(bytes.NewBufferString(TEXT), key, out); err != nil {
-		log.Fatal(err)
-	}
-	h := hex.EncodeToString(out.Bytes())
-	fmt.Println(h)
+	dst := make([]byte, len(TEXT))
+	cryptopals.Xor([]byte(TEXT), []byte("ICE"), dst)
+	fmt.Println(hex.EncodeToString(dst))
 }
